@@ -1,0 +1,244 @@
+arduino detector
+
+#include <ThingSpeak.h>
+
+/* Arduino Color Detector 
+ *   
+ *   I2C LCD 2/16 Serial Display 
+ *   - SDA ==> Nano Pin A4  
+ *   - SCL ==> Nano Pin A5
+ * 
+ *   Color Sensor
+ *    - frequency output scaling
+ *      s0          s1         
+ *       L           L         = power down no output
+ *       L           H         = 2%
+ *       H           L         = 20%
+ *       H           H         = 100% 
+ *   - EO = set low to enable 
+ *   
+ * Developed by Marcelo Rovai - 306Apr17
+ ********************************************************************************************************/
+#include "stationDefines.h"
+
+/* LCD */
+#include <Wire.h> 
+#include <LiquidCrystal.h>
+
+
+LiquidCrystal lcd(8, 9, 7, 11, 12, 13);//RS,EN,D4,D5,D6,D7
+void setup()
+{
+  pinMode(2, OUTPUT);
+  pinMode(3, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(10, INPUT); //out from sensor becomes input to arduino
+
+    // Setting frequency scaling to 100%
+  digitalWrite(2,HIGH);
+  digitalWrite(3,HIGH);
+  
+  Serial.begin(9600);
+  lcd.begin(16,2);
+  // lcd.noBacklight();
+  lcd.print("MJRoBot ColorDet");
+  Serial.println("MJRoBot Color Detector");
+  startTiming = millis();
+}
+
+void loop()
+{
+  getColor();
+  if (DEBUG) printData(); 
+  elapsedTime = millis()-startTiming; 
+  if (elapsedTime > 500) 
+  {
+   getColor();  
+      showDataLCD(); 
+    startTiming = millis();
+    
+  }
+}
+
+RGB_defines
+
+/* Based on RGB components ==> Determine color */
+void getColor()
+{  
+  readRGB();
+  
+        if (red > 8 && red < 18 && grn > 9 && grn < 19 && blu > 8 && blu < 16) color = "WHITE";
+  else if (red > 80 && red < 125 && grn > 90 && grn < 125 && blu > 80 && blu < 125) color = "BLACK";
+  else if (red > 12 && red < 30 && grn > 40 && grn < 70 && blu > 33 && blu < 70) color = "RED";
+  else if (red > 50 && red < 95 && grn > 35 && grn < 70 && blu > 45 && blu < 85)  color = "GREEN";
+  else if (red > 10 && red < 20 && grn > 10 && grn < 25 && blu > 20 && blu < 38) color = "YELLOW";
+  else if (red > 65 && red < 125 && grn > 65 && grn < 115 && blu > 32 && blu < 65) color = "BLUE";
+  else  color = "NO_COLOR";
+}
+
+/* read RGB components */
+void readRGB() 
+{
+
+  int n = 10;
+  for (int i = 0; i < n; ++i)
+  {
+    //read red component
+    digitalWrite(4, LOW);
+    digitalWrite(5, LOW);
+    red = red + pulseIn(10, LOW);
+
+   //read green component
+    digitalWrite(4, HIGH);
+    digitalWrite(5, HIGH);
+    grn = grn + pulseIn(10, LOW);
+
+   //let's read blue component
+    digitalWrite(4, LOW);
+    digitalWrite(5, HIGH);
+    blu = blu + pulseIn(10, LOW);
+ 
+  }
+  red = red/n;
+  grn = grn/n;
+  blu = blu/n;
+
+}
+ 
+/***************************************************
+* Showing capured data at LCD
+****************************************************/
+
+void showDataLCD(void)
+{
+  lcd.clear();
+  lcd.setCursor (0,0);
+  lcd.print("R");
+  lcd.setCursor (1,0);
+  lcd.print("    ");
+  lcd.setCursor (1,0);
+  lcd.print(red);
+  lcd.setCursor (5,0);
+  lcd.print(" G");
+  lcd.setCursor (7,0);
+  lcd.print("    ");
+  lcd.setCursor (7,0);
+  lcd.print(grn);
+  lcd.setCursor (12,0);
+  lcd.print("B");
+  lcd.setCursor (13,0);
+  lcd.print("    ");
+  lcd.setCursor (13,0);
+  lcd.print(blu);
+  
+  lcd.setCursor (0,1);
+  lcd.print("Color: ");
+  lcd.setCursor (7,1); 
+  lcd.print("        ");
+  lcd.setCursor (7,1);  
+  lcd.print(color);
+  
+}
+
+/***************************************************
+* Showing captured data at Serial Monitor
+****************************************************/
+void printData(void)
+{
+  Serial.print("red= ");
+  Serial.print(red);
+  Serial.print("   green= ");
+  Serial.print(grn);
+  Serial.print("   blue= ");
+  Serial.print(blu);
+  Serial.print (" - ");
+  Serial.print (color);
+  Serial.println (" detected!");
+}
+
+// TCS230 or TCS3200 pins wiring to Arduino
+#define s0 2
+#define s1 3
+#define s2 4
+#define s3 5
+#define outPin 10
+
+boolean DEBUG = true;
+
+defining 
+
+// Variables
+int red;
+int grn;
+int blu;
+String color ="";
+int count = 0;
+long startTiming = 0;
+long elapsedTime =0;
+*******MCU CODE******
+#include<ESP8266WiFi.h>
+#include <WiFiClient.h> 
+#include <ESP8266WebServer.h>
+String api= "A4O855X7DZBFFN3S";
+const char* ssid= "Redmi";
+const char* psw= "Arduino123";
+const char *host = "api.thingspeak.com";
+const char* server= "api.thingspeak.com";
+WiFiClient client;
+#define Sout D8;
+int redFrequency= 0;
+int greenFrequency= 0;
+int blueFrequency=0;
+void setup() {
+  // put your setup code here, to run once:
+
+Serial.begin(115200);
+WiFi.disconnect();
+delay(10);
+WiFi.begin(ssid,psw);
+Serial.println("connecting");
+while(WiFi.status() != WL_CONNECTED)
+{
+  delay(500);
+  Serial.print(".");
+}
+Serial.println("");
+Serial.print("NodeMcu connected....");
+Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());  //IP address assigned to your ESP
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+if (client.connect(server,80)){
+  int sensorOutput= digitalRead(10);
+float millivolts=(sensorOutput/1024.0)*5000;//convert sensor value to volage
+float temp= millivolts/10;
+int color= getColor();
+ Serial.println(temp);
+  String tsData = api;
+           tsData +="&field1=";
+           tsData += String(color);
+           tsData += "\r\n\r\n";
+ 
+     client.print("POST /update HTTP/1.1\n");
+     client.print("Host: api.thingspeak.com\n");
+     client.print("Connection: close\n");
+     client.print("X-THINGSPEAKAPIKEY: "+api+"\n");
+     client.print("Content-Type: application/x-www-form-urlencoded\n");
+     client.print("Content-Length: ");
+     client.print(tsData.length());
+     client.print("\n\n");  // the 2 carriage returns indicate closing of Header fields & starting of data
+     client.print(tsData);
+     
+      
+}
+}
+
+#include "stationDefines.h"
+
+/* LCD */
+#include <Wire.h> 
+#include <LiquidCrystal.h>
